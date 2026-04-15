@@ -10,7 +10,7 @@ members = [
 
     "examples/json-pragmatic",
     "experiments/heuristic-research"
-]
+, "vrp-uniffi"]
 
 [workspace.package]
 version = "1.25.0"
@@ -39,6 +39,7 @@ rayon = "1.10.0"
 rustc-hash = "2.1.1"
 paste = "1.0.15"
 lazy_static = "1.5.0"
+uniffi = "0.31.0"
 
 # dev dependencies
 criterion = "0.5.1"
