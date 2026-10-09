@@ -1,0 +1,123 @@
+name: Native Node package
+
+on:
+  pull_request:
+    paths:
+      - 'Cargo.*'
+      - 'rosomaxa/**'
+      - 'vrp-*/**'
+      - '.github/workflows/node-package.yaml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the tested tarball to npm
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            library: vrp_uniffi.dll
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            library: libvrp_uniffi.so
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.92.0
+      - name: Native regression tests
+        run: cargo test --locked --release -p vrp-uniffi --test activity_time --target ${{ matrix.target }}
+      - name: Build native library
+        run: cargo build --locked --release -p vrp-uniffi --lib --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/${{ matrix.library }}
+          if-no-files-found: error
+
+  package:
+    needs: native
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.92.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: native
+          merge-multiple: true
+      - run: npm ci --ignore-scripts
+        working-directory: vrp-uniffi/node
+      - name: Generate bindings and assemble both native libraries
+        run: npm run build -- --native-dir ../../native
+        working-directory: vrp-uniffi/node
+      - name: Require both platform artifacts
+        run: node check-package.mjs --release
+        working-directory: vrp-uniffi/node
+      - name: Verify clean tarball install and TypeScript declarations
+        run: npm run test:package
+        working-directory: vrp-uniffi/node
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: target/node-package/*.tgz
+          if-no-files-found: error
+
+  test-package:
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-22.04]
+        node: [18, 20, 22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: package-artifact
+      - name: Install tarball in an empty consumer
+        shell: bash
+        run: |
+          mkdir consumer
+          cd consumer
+          npm init -y
+          npm install --ignore-scripts --no-audit ../package-artifact/*.tgz
+      - name: CommonJS regression
+        run: node vrp-uniffi/tests/activity_time.cjs ./consumer/node_modules/@maptimy/vrp-uniffi
+      - name: ESM regression
+        run: node vrp-uniffi/tests/activity_time.cjs ./consumer/node_modules/@maptimy/vrp-uniffi --esm
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: test-package
+    runs-on: ubuntu-22.04
+    environment: npm
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: package-artifact
+      - name: Publish the exact tested tarball
+        run: npm publish package-artifact/*.tgz --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

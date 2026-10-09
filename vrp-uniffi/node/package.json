@@ -1,0 +1,35 @@
+{
+  "name": "@maptimy/vrp-uniffi",
+  "version": "0.4.0",
+  "description": "Native pragmatic vehicle routing solver with generated Node.js bindings",
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "git+https://github.com/bjtrounson/vrp.git", "directory": "vrp-uniffi/node" },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "require": "./dist/index.js", "import": "./dist/index.mjs" }
+  },
+  "files": ["dist"],
+  "engines": { "node": ">=18" },
+  "os": ["win32", "linux"],
+  "cpu": ["x64"],
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node ../tests/activity_time.cjs . && node ../tests/activity_time.cjs . --esm",
+    "test:package": "node test-package.mjs",
+    "prepack": "node check-package.mjs",
+    "prepublishOnly": "node check-package.mjs --release",
+    "pack:check": "npm pack --dry-run"
+  },
+  "dependencies": {
+    "@ubjs/core": "0.31.0-6",
+    "@ubjs/node": "0.31.0-6"
+  },
+  "devDependencies": {
+    "@types/node": "18.19.130",
+    "esbuild": "0.25.12",
+    "typescript": "5.8.3",
+    "uniffi-bindgen-react-native": "0.31.0-6"
+  }
+}

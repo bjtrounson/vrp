@@ -28,6 +28,12 @@ pub struct Schedule {
 }
 
 #[derive(Clone, uniffi::Record, Deserialize, Serialize)]
+pub struct Interval {
+    pub start: String,
+    pub end: String,
+}
+
+#[derive(Clone, uniffi::Record, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Stop {
     pub location: super::problem::Location,
@@ -46,7 +52,7 @@ pub struct Activity {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<super::problem::Location>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub time: Option<Schedule>,
+    pub time: Option<Interval>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_tag: Option<String>,
 }
