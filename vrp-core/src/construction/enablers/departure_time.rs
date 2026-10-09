@@ -52,12 +52,24 @@ fn try_advance_departure_time(
 
         (start.schedule.departure + departure_shift).min(latest_allowed_departure)
     } else {
-        let start_to_first = transport.duration(
-            route,
-            start.place.location,
-            first.place.location,
-            TravelTime::Departure(last_departure_time),
-        );
+        let start_to_first = if let Some(weights) = route_weights(route) {
+            let config = route.actor.vehicle.dimens.get_vehicle_weight_routing().unwrap();
+            let profile = config.profile(weights[0])?;
+            transport.duration_with_profile(
+                route,
+                profile,
+                start.place.location,
+                first.place.location,
+                TravelTime::Departure(last_departure_time),
+            )
+        } else {
+            transport.duration(
+                route,
+                start.place.location,
+                first.place.location,
+                TravelTime::Departure(last_departure_time),
+            )
+        };
 
         #[allow(clippy::manual_clamp)]
         last_departure_time.max(first.place.time.start - start_to_first).min(latest_allowed_departure)

@@ -28,5 +28,8 @@ pub use self::schedule_update::*;
 mod travel_info;
 pub use self::travel_info::*;
 
+mod weight_routing;
+pub use self::weight_routing::*;
+
 mod typed_actor_group_key;
 pub use self::typed_actor_group_key::*;

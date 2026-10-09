@@ -22,16 +22,22 @@ const tarball = join(output, packed[0].filename);
 writeFileSync(join(consumer, "package.json"), '{"name":"vrp-package-check","private":true}\n');
 run(process.execPath, [npm, "install", "--ignore-scripts", "--no-audit", "--no-fund", tarball], consumer);
 const installed = join(consumer, "node_modules/@maptimy/vrp-uniffi");
-const regression = resolve(root, "../tests/activity_time.cjs");
-run(process.execPath, [regression, installed], consumer);
-run(process.execPath, [regression, installed, "--esm"], consumer);
+for (const name of ["activity_time.cjs", "weight_routing.cjs"]) {
+  const regression = resolve(root, "../tests", name);
+  run(process.execPath, [regression, installed], consumer);
+  run(process.execPath, [regression, installed, "--esm"], consumer);
+}
 // Check real package-name resolution for both module systems.
 writeFileSync(join(consumer, "check.cjs"), 'const { VrpSolver } = require("@maptimy/vrp-uniffi"); new VrpSolver().uniffiDestroy();\n');
 writeFileSync(join(consumer, "check.mjs"), 'import { VrpSolver } from "@maptimy/vrp-uniffi"; new VrpSolver().uniffiDestroy();\n');
 run(process.execPath, ["check.cjs"], consumer);
 run(process.execPath, ["check.mjs"], consumer);
 writeFileSync(join(consumer, "check.ts"), `
-import { Location, VrpSolver, type Activity, type Stop } from "@maptimy/vrp-uniffi";
+import { Location, VrpSolver, type Activity, type Stop, type VehicleProfile } from "@maptimy/vrp-uniffi";
+const profile: VehicleProfile = { matrix: "light", weightRouting: {
+  tareWeightKg: 12000n, massDimensionIndex: 1,
+  bands: [{ maxGrossWeightKg: 18000n, matrix: "light" }],
+} };
 const location: Location = new Location.Coordinate({ lat: -41, lng: 175 });
 const activity: Activity = { jobId: "pickup", typeField: "pickup", time: { start: "a", end: "b" } };
 const stop: Stop = { location, time: { arrival: "a", departure: "b" }, distance: 0n, load: [0], activities: [activity] };

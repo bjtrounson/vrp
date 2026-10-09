@@ -132,6 +132,23 @@ pub struct VehicleProfile {
     pub matrix: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scale: Option<f64>,
+    #[serde(rename = "weightRouting", skip_serializing_if = "Option::is_none")]
+    pub weight_routing: Option<WeightRouting>,
+}
+
+#[derive(Clone, uniffi::Record, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightRouting {
+    pub tare_weight_kg: i64,
+    pub mass_dimension_index: u32,
+    pub bands: Vec<WeightRoutingBand>,
+}
+
+#[derive(Clone, uniffi::Record, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightRoutingBand {
+    pub max_gross_weight_kg: i64,
+    pub matrix: String,
 }
 
 #[derive(Clone, uniffi::Record, Deserialize, Serialize)]

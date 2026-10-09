@@ -188,6 +188,9 @@ impl<T: LoadOps> ReloadFeatureFactory<T> {
         let route_intervals = RouteIntervals::Multiple {
             is_marker_single_fn,
             is_new_interval_needed_fn: Arc::new(move |route_ctx| {
+                if crate::construction::enablers::has_weight_routing(route_ctx.route()) {
+                    return route_ctx.route().tour.has_jobs();
+                }
                 route_ctx
                     .route()
                     .tour
@@ -205,6 +208,10 @@ impl<T: LoadOps> ReloadFeatureFactory<T> {
                     .unwrap_or(false)
             }),
             is_obsolete_interval_fn: Arc::new(move |route_ctx, left, right| {
+                // Capacity alone cannot prove that removing an unload preserves road access.
+                if crate::construction::enablers::has_weight_routing(route_ctx.route()) {
+                    return false;
+                }
                 let capacity: T =
                     route_ctx.route().actor.vehicle.dimens.get_vehicle_capacity().cloned().unwrap_or_default();
 

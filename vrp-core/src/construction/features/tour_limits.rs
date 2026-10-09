@@ -44,6 +44,7 @@ pub fn create_travel_limit_feature(
         .with_name(name)
         .with_constraint(TravelLimitConstraint {
             transport: transport.clone(),
+            activity: activity.clone(),
             tour_distance_limit_fn,
             tour_duration_limit_fn: tour_duration_limit_fn.clone(),
             distance_code,
@@ -88,6 +89,7 @@ impl FeatureConstraint for ActivityLimitConstraint {
 
 struct TravelLimitConstraint {
     transport: Arc<dyn TransportCost>,
+    activity: Arc<dyn ActivityCost>,
     tour_distance_limit_fn: TravelLimitFn<Distance>,
     tour_duration_limit_fn: TravelLimitFn<Duration>,
     distance_code: ViolationCode,
@@ -96,6 +98,11 @@ struct TravelLimitConstraint {
 
 impl TravelLimitConstraint {
     fn calculate_travel(&self, route_ctx: &RouteContext, activity_ctx: &ActivityContext) -> (Distance, Duration) {
+        if has_weight_routing(route_ctx.route()) {
+            let (before, after) =
+                evaluate_weighted_insertion(route_ctx, activity_ctx, self.activity.as_ref(), self.transport.as_ref());
+            return (after.distance - before.distance, after.duration - before.duration);
+        }
         calculate_travel_delta(route_ctx, activity_ctx, self.transport.as_ref())
     }
 }
@@ -105,6 +112,9 @@ impl FeatureConstraint for TravelLimitConstraint {
         match move_ctx {
             MoveContext::Route { .. } => None,
             MoveContext::Activity { route_ctx, activity_ctx, .. } => {
+                if route_ctx.state().get_partial_weight_insertion().copied().unwrap_or(false) {
+                    return None;
+                }
                 let tour_distance_limit = (self.tour_distance_limit_fn)(route_ctx.route().actor.as_ref());
                 let tour_duration_limit = (self.tour_duration_limit_fn)(route_ctx.route().actor.as_ref());
 

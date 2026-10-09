@@ -43,7 +43,7 @@ prop_compose! {
         generate_vehicles(
              generate_vehicle(
                 2..4,
-                Just(VehicleProfile { matrix: "car".to_string(), scale: None }),
+                Just(VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None }),
                 generate_simple_capacity(5..20),
                 default_costs_prototype(),
                 generate_no_vehicle_skills(),
@@ -58,7 +58,7 @@ prop_compose! {
         Problem {
             plan: Plan {
                 clustering: Some(Clustering::Vicinity {
-                    profile: VehicleProfile { matrix: "car".to_string(), scale: None },
+                    profile: VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None },
                     threshold: VicinityThresholdPolicy {
                         duration,
                         distance,

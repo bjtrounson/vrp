@@ -108,7 +108,7 @@ pub fn default_breaks_prototype() -> impl Strategy<Value = Option<Vec<VehicleBre
 }
 
 pub fn default_vehicle_profile() -> impl Strategy<Value = VehicleProfile> {
-    Just(VehicleProfile { matrix: "car".to_string(), scale: None })
+    Just(VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None })
 }
 
 pub fn default_matrix_profiles() -> impl Strategy<Value = Vec<MatrixProfile>> {
@@ -130,7 +130,7 @@ pub fn default_vehicle_shifts() -> impl Strategy<Value = Vec<VehicleShift>> {
 pub fn default_vehicle_type_prototype() -> impl Strategy<Value = VehicleType> {
     generate_vehicle(
         2..4,
-        Just(VehicleProfile { matrix: "car".to_string(), scale: None }),
+        Just(VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None }),
         generate_simple_capacity(30..50),
         default_costs_prototype(),
         generate_no_vehicle_skills(),

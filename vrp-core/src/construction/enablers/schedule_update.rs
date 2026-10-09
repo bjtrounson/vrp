@@ -1,3 +1,4 @@
+use super::{VehicleWeightRoutingDimension, evaluate_weighted_route, has_weight_routing, route_weights};
 use crate::construction::heuristics::{RouteContext, RouteState};
 use crate::models::OP_START_MSG;
 use crate::models::common::{Distance, Duration, Schedule, Timestamp};
@@ -13,6 +14,16 @@ custom_tour_state!(pub(crate) LimitDuration typeof Duration);
 
 /// Updates route schedule data.
 pub fn update_route_schedule(route_ctx: &mut RouteContext, activity: &dyn ActivityCost, transport: &dyn TransportCost) {
+    if has_weight_routing(route_ctx.route()) {
+        let evaluation = evaluate_weighted_route(route_ctx.route(), activity, transport);
+        for (index, schedule) in evaluation.schedules.into_iter().enumerate() {
+            route_ctx.route_mut().tour.get_mut(index).unwrap().schedule = schedule;
+        }
+        update_states(route_ctx, activity, transport);
+        route_ctx.state_mut().set_total_distance(evaluation.distance);
+        route_ctx.state_mut().set_total_duration(evaluation.duration);
+        return;
+    }
     update_schedules(route_ctx, activity, transport);
     update_states(route_ctx, activity, transport);
     update_statistics(route_ctx, transport);
@@ -68,10 +79,11 @@ fn update_states(route_ctx: &mut RouteContext, activity: &dyn ActivityCost, tran
     );
 
     let route = route_ctx.route();
+    let weights = route_weights(route);
     let mut latest_arrivals = Vec::with_capacity(route.tour.total());
     let mut waiting_times = Vec::with_capacity(route.tour.total());
 
-    route.tour.all_activities().rev().fold(init, |acc, act| {
+    route.tour.all_activities().enumerate().rev().fold(init, |acc, (index, act)| {
         if act.job.is_none() {
             latest_arrivals.push(Default::default());
             waiting_times.push(Default::default());
@@ -82,8 +94,15 @@ fn update_states(route_ctx: &mut RouteContext, activity: &dyn ActivityCost, tran
         let latest_arrival_time = if end_time == Float::MAX {
             act.place.time.end
         } else {
-            let latest_departure =
-                end_time - transport.duration(route, act.place.location, prev_loc, TravelTime::Arrival(end_time));
+            let time = TravelTime::Arrival(end_time);
+            let duration = if let Some(weights) = &weights {
+                let config = route.actor.vehicle.dimens.get_vehicle_weight_routing().unwrap();
+                let profile = config.profile(weights[index]).unwrap_or(&config.bands[0].1);
+                transport.duration_with_profile(route, profile, act.place.location, prev_loc, time).max(0.)
+            } else {
+                transport.duration(route, act.place.location, prev_loc, time)
+            };
+            let latest_departure = end_time - duration;
             activity.estimate_arrival(route, act, latest_departure).unwrap_value()
         };
         let future_waiting = waiting + (act.place.time.start - act.schedule.arrival).max(0.);

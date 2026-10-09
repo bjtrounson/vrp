@@ -115,7 +115,7 @@ fn can_handle_properly_invalid_break_removal() {
                 vehicles: vec![VehicleType {
                     type_id: "vehicle1".to_string(),
                     vehicle_ids: vec!["vehicle1_1".to_string()],
-                    profile: VehicleProfile { matrix: "car".to_string(), scale: None },
+                    profile: VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None },
                     costs: VehicleCosts { fixed: Some(20.), distance: 0.002, time: 0.003 },
                     shifts: vec![VehicleShift {
                         start: ShiftStart {

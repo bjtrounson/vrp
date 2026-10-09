@@ -8,7 +8,7 @@ use crate::format::UnknownLocationFallback;
 use crate::get_unique_locations;
 use crate::utils::get_approx_transportation;
 use std::collections::HashSet;
-use vrp_core::construction::enablers::create_typed_actor_groups;
+use vrp_core::construction::enablers::{VehicleWeightRoutingDimension, create_typed_actor_groups};
 use vrp_core::construction::features::{VehicleCapacityDimension, VehicleSkillsDimension};
 use vrp_core::models::common::*;
 use vrp_core::models::problem::*;
@@ -62,7 +62,7 @@ pub(super) fn create_transport_costs(
                 let err_fn = |i| move || GenericError::from(format!("invalid matrix index: {i}"));
 
                 for (i, error) in error_codes.iter().enumerate() {
-                    if *error > 0 {
+                    if *error != 0 {
                         durations.push(-1.);
                         distances.push(-1.);
                     } else {
@@ -88,11 +88,22 @@ pub(super) fn create_transport_costs(
         return Err("amount of fleet profiles does not match matrix profiles".into());
     }
 
-    if coord_index.has_custom() {
+    let transport = if coord_index.has_custom() {
         create_matrix_transport_cost_with_fallback(matrix_data, UnknownLocationFallback::new(coord_index))
     } else {
         create_matrix_transport_cost(matrix_data)
+    }?;
+    let mut weighted_profiles: HashMap<usize, Vec<usize>> = HashMap::new();
+    for vehicle in &api_problem.fleet.vehicles {
+        if let Some(config) = &vehicle.profile.weight_routing {
+            let base = matrix_profiles[&vehicle.profile.matrix];
+            let profiles = weighted_profiles.entry(base).or_insert_with(|| vec![base]);
+            profiles.extend(config.bands.iter().map(|band| matrix_profiles[&band.matrix]));
+            profiles.sort_unstable();
+            profiles.dedup();
+        }
     }
+    Ok(vrp_core::construction::enablers::with_weight_routing_estimates(transport, weighted_profiles))
 }
 
 pub(super) fn read_fleet(api_problem: &ApiProblem, props: &ProblemProperties, coord_index: &CoordIndex) -> CoreFleet {
@@ -148,6 +159,34 @@ pub(super) fn read_fleet(api_problem: &ApiProblem, props: &ProblemProperties, co
 
                 if let Some(tour_size) = tour_size {
                     dimens.set_tour_size(tour_size);
+                }
+
+                if let Some(config) = &vehicle.profile.weight_routing {
+                    let mut bands = config
+                        .bands
+                        .iter()
+                        .map(|band| {
+                            (
+                                band.max_gross_weight_kg,
+                                Profile::new(profile_indices[&band.matrix], vehicle.profile.scale),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    bands.sort_by_key(|(limit, _)| *limit);
+                    dimens.set_vehicle_weight_routing(vrp_core::construction::enablers::WeightRouting {
+                        tare_weight_kg: config.tare_weight_kg,
+                        mass_dimension_index: config.mass_dimension_index,
+                        bands,
+                        is_reload: |activity| {
+                            activity
+                                .job
+                                .as_ref()
+                                .and_then(|job| job.dimens.get_job_type())
+                                .is_some_and(|kind| kind == "reload")
+                        },
+                        max_distance: vehicle.limits.as_ref().and_then(|limits| limits.max_distance),
+                        max_duration: vehicle.limits.as_ref().and_then(|limits| limits.max_duration),
+                    });
                 }
 
                 if props.has_multi_dimen_capacity {

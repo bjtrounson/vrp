@@ -5,7 +5,7 @@ use vrp_core::prelude::Float;
 fn create_vehicle_type(type_id: &str, scale: Option<Float>) -> VehicleType {
     VehicleType {
         type_id: type_id.to_string(),
-        profile: VehicleProfile { matrix: "car".to_string(), scale },
+        profile: VehicleProfile { matrix: "car".to_string(), scale, weight_routing: None },
         vehicle_ids: vec![format!("{type_id}_1")],
         ..create_default_vehicle_type()
     }

@@ -12,6 +12,14 @@ use vrp_core::models::common::{TimeOffset, TimeSpan, TimeWindow};
 use vrp_core::solver::processing::{ClusterConfigExtraProperty, ReservedTimesExtraProperty};
 
 pub(super) fn map_to_problem_with_approx(problem: ApiProblem) -> Result<CoreProblem, MultiFormatError> {
+    if problem.fleet.vehicles.iter().any(|v| v.profile.weight_routing.is_some()) {
+        return Err(vec![FormatError::new(
+            "E1506".into(),
+            "invalid weight routing".into(),
+            "supply explicit matrices for weight routing".into(),
+        )]
+        .into());
+    }
     let coord_index = CoordIndex::new(&problem);
     let matrices = if coord_index.has_indices() { vec![] } else { create_approx_matrices(&problem) };
     map_to_problem(problem, matrices, coord_index)

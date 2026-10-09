@@ -113,7 +113,7 @@ mod actual {
                 VehicleType {
                     type_id: vehicle.id.clone(),
                     vehicle_ids: (1..=vehicle.amount).map(|seq| format!("{}_{}", vehicle.profile, seq)).collect(),
-                    profile: VehicleProfile { matrix: vehicle.profile, scale: None },
+                    profile: VehicleProfile { matrix: vehicle.profile, scale: None, weight_routing: None },
                     costs: VehicleCosts { fixed: Some(25.), distance: 0.0002, time: 0.005 },
                     shifts: vec![VehicleShift {
                         start: ShiftStart {

@@ -9,7 +9,7 @@ fn can_handle_parking_with_no_clusters_and_job_time_windows() {
                 create_delivery_job_with_times("job2", (52.512, 13.384), vec![(32400, 46800)], 1.),
             ],
             clustering: Some(Clustering::Vicinity {
-                profile: VehicleProfile { matrix: "car".to_string(), scale: None },
+                profile: VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None },
                 threshold: VicinityThresholdPolicy {
                     duration: 30.,
                     distance: 16.,
@@ -84,7 +84,7 @@ fn can_handle_waiting_time_with_parking_impl(
                 .map(|(id, coordinates, times)| create_delivery_job_with_times(id, coordinates, times, 1.))
                 .collect(),
             clustering: Some(Clustering::Vicinity {
-                profile: VehicleProfile { matrix: "car".to_string(), scale: None },
+                profile: VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None },
                 threshold: VicinityThresholdPolicy {
                     duration: threshold.0,
                     distance: threshold.1,

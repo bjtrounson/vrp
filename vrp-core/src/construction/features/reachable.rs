@@ -1,6 +1,8 @@
 //! A feature to detect filter jobs based on their reachability.
 
+use crate::construction::enablers::{PartialWeightInsertionTourState, evaluate_weighted_insertion, has_weight_routing};
 use crate::construction::heuristics::MoveContext;
+use crate::models::problem::SimpleActivityCost;
 use crate::models::problem::{Job, TransportCost, TravelTime};
 use crate::models::{ConstraintViolation, Feature, FeatureBuilder, FeatureConstraint, ViolationCode};
 use rosomaxa::utils::GenericError;
@@ -25,6 +27,18 @@ impl FeatureConstraint for ReachableConstraint {
         match move_ctx {
             MoveContext::Route { .. } => None,
             MoveContext::Activity { route_ctx, activity_ctx, .. } => {
+                if has_weight_routing(route_ctx.route()) {
+                    if route_ctx.state().get_partial_weight_insertion().copied().unwrap_or(false) {
+                        return None;
+                    }
+                    let (_, candidate) = evaluate_weighted_insertion(
+                        route_ctx,
+                        activity_ctx,
+                        &SimpleActivityCost::default(),
+                        self.transport.as_ref(),
+                    );
+                    return if candidate.reachable { None } else { ConstraintViolation::skip(self.code) };
+                }
                 let prev = activity_ctx.prev;
                 let target = activity_ctx.target;
                 let next = activity_ctx.next;

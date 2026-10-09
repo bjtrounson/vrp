@@ -14,7 +14,7 @@ fn can_use_scale_on_profile() {
         &[(1., "delivery"), (2., "delivery")],
         capacity,
         Clustering::Vicinity {
-            profile: VehicleProfile { matrix: "car".to_string(), scale: Some(2.) },
+            profile: VehicleProfile { matrix: "car".to_string(), scale: Some(2.), weight_routing: None },
             threshold: VicinityThresholdPolicy {
                 duration: 3.,
                 distance: 3.,

@@ -46,6 +46,18 @@ both native files. `prepublishOnly` also checks them when publishing this direct
 Do not publish a locally packed host-only tarball directly: npm publishing an
 existing tarball does not run this directory's release guard.
 
+## Weight-dependent matrices
+
+The optional `vehicle.profile.weightRouting` selects among separately supplied matrices. Set
+`tareWeightKg`, `massDimensionIndex` (zero-based kilograms dimension in demands), and `bands` with
+`maxGrossWeightKg` and `matrix` profile references. Thresholds are arbitrary inclusive upper bounds;
+the application generates the matrices. In the generated Node types, tare and threshold kilograms
+use `bigint`, while the dimension index and demand values use `number`.
+
+Rebuild the native library and generated bindings together after updating. See the
+[routing profile documentation](../../docs/src/concepts/pragmatic/routing/profile.md) for the input
+contract and supported combinations, and `../tests/weight_routing.cjs` for a complete Node example.
+
 ## CI and publishing
 
 `.github/workflows/node-package.yaml` builds both libraries, runs the Rust

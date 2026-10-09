@@ -23,7 +23,7 @@ fn can_mix_pickup_delivery_jobs() {
         &[(1., "delivery"), (2., "pickup"), (3., "delivery"), (10., "delivery")],
         3,
         Clustering::Vicinity {
-            profile: VehicleProfile { matrix: "car".to_string(), scale: None },
+            profile: VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None },
             threshold: VicinityThresholdPolicy {
                 duration: 3.,
                 distance: 3.,
@@ -110,7 +110,7 @@ fn can_vary_cluster_size_based_on_capacity_impl(
         &[(1., "delivery"), (2., "delivery"), (3., "delivery"), (4., "delivery")],
         capacity,
         Clustering::Vicinity {
-            profile: VehicleProfile { matrix: "car".to_string(), scale: None },
+            profile: VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None },
             threshold: VicinityThresholdPolicy {
                 duration: 5.,
                 distance: 5.,

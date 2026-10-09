@@ -179,6 +179,14 @@ impl TransportConstraint {
         route_ctx: &RouteContext,
         activity_ctx: &ActivityContext,
     ) -> Option<ConstraintViolation> {
+        if has_weight_routing(route_ctx.route()) {
+            if route_ctx.state().get_partial_weight_insertion().copied().unwrap_or(false) {
+                return None;
+            }
+            let (_, candidate) =
+                evaluate_weighted_insertion(route_ctx, activity_ctx, self.activity.as_ref(), self.transport.as_ref());
+            return if candidate.time_feasible { None } else { ConstraintViolation::skip(self.time_window_code) };
+        }
         let actor = route_ctx.route().actor.as_ref();
         let route = route_ctx.route();
 
@@ -297,6 +305,12 @@ impl FeatureObjective for DistanceObjective {
             return Cost::default();
         };
 
+        if has_weight_routing(route_ctx.route()) {
+            let (before, after) =
+                evaluate_weighted_insertion(route_ctx, activity_ctx, self.activity.as_ref(), self.transport.as_ref());
+            return after.distance - before.distance;
+        }
+
         estimate_leg(self.transport.as_ref(), self.activity.as_ref(), route_ctx, activity_ctx, |from, to, time| {
             self.transport.distance(route_ctx.route(), from, to, time)
         })
@@ -319,6 +333,12 @@ impl FeatureObjective for DurationObjective {
         let MoveContext::Activity { route_ctx, activity_ctx, .. } = move_ctx else {
             return Cost::default();
         };
+
+        if has_weight_routing(route_ctx.route()) {
+            let (before, after) =
+                evaluate_weighted_insertion(route_ctx, activity_ctx, self.activity.as_ref(), self.transport.as_ref());
+            return after.duration - before.duration;
+        }
 
         estimate_leg(self.transport.as_ref(), self.activity.as_ref(), route_ctx, activity_ctx, |from, to, time| {
             self.transport.duration(route_ctx.route(), from, to, time)
@@ -392,6 +412,11 @@ impl CostObjective {
     }
 
     fn estimate_activity(&self, route_ctx: &RouteContext, activity_ctx: &ActivityContext) -> Float {
+        if has_weight_routing(route_ctx.route()) {
+            let (before, after) =
+                evaluate_weighted_insertion(route_ctx, activity_ctx, self.activity.as_ref(), self.transport.as_ref());
+            return after.cost - before.cost;
+        }
         let prev = activity_ctx.prev;
         let target = activity_ctx.target;
         let next = activity_ctx.next;

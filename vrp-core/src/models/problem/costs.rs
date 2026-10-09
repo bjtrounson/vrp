@@ -79,6 +79,21 @@ impl ActivityCost for SimpleActivityCost {
 
 /// Provides the way to get routing information for specific locations and actor.
 pub trait TransportCost: Send + Sync {
+    /// Travel cost with an explicit profile, used by load-dependent routing.
+    fn cost_with_profile(
+        &self,
+        route: &Route,
+        profile: &Profile,
+        from: Location,
+        to: Location,
+        time: TravelTime,
+    ) -> Cost {
+        let actor = &route.actor;
+        self.distance_with_profile(route, profile, from, to, time)
+            * (actor.driver.costs.per_distance + actor.vehicle.costs.per_distance)
+            + self.duration_with_profile(route, profile, from, to, time)
+                * (actor.driver.costs.per_driving_time + actor.vehicle.costs.per_driving_time)
+    }
     /// Returns time-dependent transport cost between two locations for given actor.
     fn cost(&self, route: &Route, from: Location, to: Location, travel_time: TravelTime) -> Cost {
         let actor = route.actor.as_ref();
@@ -101,6 +116,30 @@ pub trait TransportCost: Send + Sync {
 
     /// Returns time-dependent travel distance between locations specific for given actor.
     fn distance(&self, route: &Route, from: Location, to: Location, travel_time: TravelTime) -> Distance;
+
+    /// Travel duration for an explicitly selected matrix profile. Defaults to the static estimate.
+    fn duration_with_profile(
+        &self,
+        _: &Route,
+        profile: &Profile,
+        from: Location,
+        to: Location,
+        _: TravelTime,
+    ) -> Duration {
+        self.duration_approx(profile, from, to)
+    }
+
+    /// Travel distance for an explicitly selected matrix profile. Defaults to the static estimate.
+    fn distance_with_profile(
+        &self,
+        _: &Route,
+        profile: &Profile,
+        from: Location,
+        to: Location,
+        _: TravelTime,
+    ) -> Distance {
+        self.distance_approx(profile, from, to)
+    }
 
     /// Returns size of known locations
     fn size(&self) -> usize;
@@ -398,6 +437,27 @@ impl<T: TransportFallback> TimeAwareMatrixTransportCost<T> {
 }
 
 impl<T: TransportFallback> TransportCost for TimeAwareMatrixTransportCost<T> {
+    fn duration_with_profile(
+        &self,
+        _: &Route,
+        profile: &Profile,
+        from: Location,
+        to: Location,
+        time: TravelTime,
+    ) -> Duration {
+        self.interpolate_duration(profile, from, to, time)
+    }
+
+    fn distance_with_profile(
+        &self,
+        _: &Route,
+        profile: &Profile,
+        from: Location,
+        to: Location,
+        time: TravelTime,
+    ) -> Distance {
+        self.interpolate_distance(profile, from, to, time)
+    }
     fn duration_approx(&self, profile: &Profile, from: Location, to: Location) -> Duration {
         self.interpolate_duration(profile, from, to, TravelTime::Departure(0.))
     }

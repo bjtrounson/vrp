@@ -16,7 +16,7 @@
   "cpu": ["x64"],
   "scripts": {
     "build": "node build.mjs",
-    "test": "node ../tests/activity_time.cjs . && node ../tests/activity_time.cjs . --esm",
+    "test": "node ../tests/activity_time.cjs . && node ../tests/activity_time.cjs . --esm && node ../tests/weight_routing.cjs . && node ../tests/weight_routing.cjs . --esm",
     "test:package": "node test-package.mjs",
     "prepack": "node check-package.mjs",
     "prepublishOnly": "node check-package.mjs --release",

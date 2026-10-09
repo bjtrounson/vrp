@@ -477,6 +477,32 @@ pub struct VehicleProfile {
     /// Default value is 1.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scale: Option<Float>,
+
+    /// Optional departure-weight selection among separately supplied matrices.
+    #[serde(rename = "weightRouting", skip_serializing_if = "Option::is_none")]
+    pub weight_routing: Option<WeightRouting>,
+}
+
+/// Weight-dependent routing configuration for one vehicle type.
+#[derive(Clone, Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightRouting {
+    /// Empty vehicle/combination mass in kilograms.
+    pub tare_weight_kg: i64,
+    /// Zero-based demand/capacity dimension containing kilograms.
+    pub mass_dimension_index: usize,
+    /// Inclusive weight thresholds referencing supplied matrix profiles.
+    pub bands: Vec<WeightRoutingBand>,
+}
+
+/// A caller-defined inclusive gross-weight limit and matrix reference.
+#[derive(Clone, Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightRoutingBand {
+    /// Maximum gross weight in kilograms covered by this matrix.
+    pub max_gross_weight_kg: i64,
+    /// Matrix profile name from fleet.profiles.
+    pub matrix: String,
 }
 
 /// Specifies routing matrix profile.

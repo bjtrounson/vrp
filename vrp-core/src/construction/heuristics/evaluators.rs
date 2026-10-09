@@ -6,6 +6,7 @@ use rosomaxa::prelude::UnwrapValue;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 
+use crate::construction::enablers::{PartialWeightInsertionTourState, has_weight_routing};
 use crate::construction::heuristics::*;
 use crate::models::common::Timestamp;
 use crate::models::problem::{Job, Multi, Single};
@@ -67,10 +68,13 @@ pub fn eval_job_insertion_in_route(
 
     // analyze alternative and return it if it looks better based on routing cost comparison
     let (route_costs, best_known_cost) = match alternative.as_success() {
-        Some(success) => match eval_ctx.result_selector.select_cost(&success.cost, &route_costs) {
-            Either::Left(_) => return alternative,
-            Either::Right(_) => (route_costs, Some(success.cost.clone())),
-        },
+        Some(success) if !has_weight_routing(route_ctx.route()) => {
+            match eval_ctx.result_selector.select_cost(&success.cost, &route_costs) {
+                Either::Left(_) => return alternative,
+                Either::Right(_) => (route_costs, Some(success.cost.clone())),
+            }
+        }
+        Some(success) => (route_costs, Some(success.cost.clone())),
         _ => (route_costs, None),
     };
 
@@ -167,6 +171,9 @@ fn eval_multi(
     route_costs: InsertionCost,
     best_known_cost: Option<InsertionCost>,
 ) -> InsertionResult {
+    if has_weight_routing(route_ctx.route()) {
+        return eval_weighted_multi(eval_ctx, solution_ctx, route_ctx, multi, position, route_costs, best_known_cost);
+    }
     let insertion_idx = get_insertion_index(route_ctx, position).unwrap_or(0);
     // 1. analyze permutations
     let result = multi
@@ -230,6 +237,119 @@ fn eval_multi(
     } else {
         let (code, stopped) = result.violation.map_or((ViolationCode::unknown(), false), |v| (v.code, v.stopped));
         InsertionResult::make_failure_with_code(code, stopped, Some(job))
+    }
+}
+
+// A pending delivery can restore reachability after a pickup. Evaluate complete placements before pruning.
+fn eval_weighted_multi(
+    eval_ctx: &EvaluationContext,
+    solution_ctx: &SolutionContext,
+    original: &RouteContext,
+    multi: &Arc<Multi>,
+    position: InsertionPosition,
+    route_costs: InsertionCost,
+    best_known_cost: Option<InsertionCost>,
+) -> InsertionResult {
+    type BestPlacement = (Option<InsertionCost>, Option<Vec<(Activity, usize)>>);
+
+    #[allow(clippy::too_many_arguments)]
+    fn visit(
+        eval_ctx: &EvaluationContext,
+        solution_ctx: &SolutionContext,
+        route_ctx: &RouteContext,
+        services: &[Arc<Single>],
+        next_index: usize,
+        first_position: Option<usize>,
+        cost: InsertionCost,
+        activities: &mut Vec<(Activity, usize)>,
+        best: &mut BestPlacement,
+        violation: &mut ViolationCode,
+    ) {
+        let Some((single, remaining)) = services.split_first() else {
+            return;
+        };
+        let mut before = route_ctx.deep_copy();
+        before.state_mut().set_partial_weight_insertion(!remaining.is_empty());
+        for (items, index) in before.route().tour.legs().skip(next_index) {
+            if first_position.is_some_and(|selected| selected != index) {
+                continue;
+            }
+            let (prev, next) = match items {
+                [prev] => (prev, None),
+                [prev, next] => (prev, Some(next)),
+                _ => continue,
+            };
+            let start = before.route().tour.start().unwrap().schedule.departure;
+            for (place_idx, place) in single.places.iter().enumerate() {
+                for time in &place.times {
+                    let mut target = Activity::new_with_job(single.clone());
+                    target.place = Place {
+                        idx: place_idx,
+                        location: place.location.unwrap_or(prev.place.location),
+                        duration: place.duration,
+                        time: time.to_time_window(start),
+                    };
+                    let activity_ctx = ActivityContext { index, prev, target: &target, next };
+                    let move_ctx = MoveContext::activity(solution_ctx, &before, &activity_ctx);
+                    if let Some(failure) = eval_ctx.goal.evaluate(&move_ctx) {
+                        *violation = failure.code;
+                        continue;
+                    }
+                    let next_cost = cost.clone() + eval_ctx.goal.estimate(&move_ctx);
+                    activities.push((target.deep_copy(), index));
+                    if remaining.is_empty() {
+                        if best
+                            .0
+                            .as_ref()
+                            .is_none_or(|old| eval_ctx.result_selector.select_cost(&next_cost, old).is_left())
+                        {
+                            best.0 = Some(next_cost);
+                            best.1 = Some(activities.iter().map(|(a, i)| (a.deep_copy(), *i)).collect());
+                        }
+                    } else {
+                        let mut candidate = before.deep_copy();
+                        candidate.route_mut().tour.insert_at(target, index + 1);
+                        eval_ctx.goal.accept_route_state(&mut candidate);
+                        visit(
+                            eval_ctx,
+                            solution_ctx,
+                            &candidate,
+                            remaining,
+                            index + 1,
+                            None,
+                            next_cost,
+                            activities,
+                            best,
+                            violation,
+                        );
+                    }
+                    activities.pop();
+                }
+            }
+        }
+    }
+
+    let mut best = (best_known_cost, None);
+    let mut violation = ViolationCode::unknown();
+    for services in multi.permutations() {
+        visit(
+            eval_ctx,
+            solution_ctx,
+            original,
+            &services,
+            0,
+            get_insertion_index(original, position),
+            route_costs.clone(),
+            &mut vec![],
+            &mut best,
+            &mut violation,
+        );
+    }
+    match best {
+        (Some(cost), Some(activities)) => {
+            InsertionResult::make_success(cost, eval_ctx.job.clone(), activities, original)
+        }
+        _ => InsertionResult::make_failure_with_code(violation, false, Some(eval_ctx.job.clone())),
     }
 }
 

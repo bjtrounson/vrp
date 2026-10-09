@@ -24,7 +24,31 @@ fn check_routing_rules(context: &CheckerContext) -> GenericResult<()> {
         let get_matrix_data = |from: &PointStop, to: &PointStop| -> GenericResult<(i64, i64)> {
             let from_idx = context.get_location_index(&from.location)?;
             let to_idx = context.get_location_index(&to.location)?;
-            context.get_matrix_data(&profile, from_idx, to_idx)
+            if let Some(config) = &context.get_vehicle(&tour.vehicle_id)?.profile.weight_routing {
+                // Solution loads may omit trailing zero dimensions, including an empty departure load.
+                let mass = from.load.get(config.mass_dimension_index).copied().unwrap_or_default();
+                let gross = config.tare_weight_kg.checked_add(i64::from(mass)).ok_or("gross weight overflow")?;
+                let band = config
+                    .bands
+                    .iter()
+                    .filter(|b| b.max_gross_weight_kg >= gross)
+                    .min_by_key(|b| b.max_gross_weight_kg)
+                    .ok_or("route exceeds supplied weight coverage")?;
+                let matrices = context.matrices.as_ref().ok_or("missing weight matrices")?;
+                let index = matrices
+                    .iter()
+                    .position(|m| m.profile.as_ref() == Some(&band.matrix))
+                    .ok_or("missing weight matrix")?;
+                let selected = Profile::new(index, Some(profile.scale));
+                let matrix = &matrices[index];
+                let size = context.coord_index.max_matrix_index() + 1;
+                if matrix.error_codes.as_ref().is_some_and(|e| e[from_idx * size + to_idx] != 0) {
+                    return Err("unreachable leg in selected weight matrix".into());
+                }
+                context.get_matrix_data(&selected, from_idx, to_idx)
+            } else {
+                context.get_matrix_data(&profile, from_idx, to_idx)
+            }
         };
 
         let first_stop = tour.stops.first().ok_or_else(|| "empty tour".to_string())?;
@@ -54,24 +78,25 @@ fn check_routing_rules(context: &CheckerContext) -> GenericResult<()> {
                     (prev, Stop::Transit(transit)) => {
                         let prev_departure = parse_time(&prev.schedule().departure);
                         let next_arrival = parse_time(&transit.time.arrival);
-                        // NOTE an edge case: duration of break will be counted in transit stop
-                        let duration = if next_arrival == prev_departure {
-                            0.
-                        } else {
-                            parse_time(&transit.time.departure) - next_arrival
-                        };
-                        (0_i64, duration as i64, total_distance)
+                        (0_i64, (next_arrival - prev_departure) as i64, total_distance)
                     }
                     (Stop::Transit(_), Stop::Point(to)) => {
-                        assert!(leg_idx > 0);
-                        let from = tour
-                            .stops
-                            .get(leg_idx - 1)
-                            .unwrap()
-                            .as_point()
-                            .expect("two consistent transit stops are not supported");
+                        let point_idx = tour.stops[..leg_idx]
+                            .iter()
+                            .rposition(|stop| stop.as_point().is_some())
+                            .ok_or("transit stop has no preceding point stop")?;
+                        let from = tour.stops[point_idx].as_point().unwrap();
                         let (distance, duration) = get_matrix_data(from, to)?;
-                        (distance, duration, to.distance)
+                        let already_driven = tour.stops[point_idx..=leg_idx]
+                            .windows(2)
+                            .map(|stops| {
+                                parse_time(&stops[1].schedule().arrival) - parse_time(&stops[0].schedule().departure)
+                            })
+                            .sum::<Float>() as i64;
+                        if already_driven > duration {
+                            return Err("travel before transit break exceeds matrix duration".into());
+                        }
+                        (distance, duration - already_driven, to.distance)
                     }
                 };
 

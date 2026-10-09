@@ -60,7 +60,7 @@ fn can_cluster_simple_jobs_impl(
         &[(1., "delivery"), (2., "delivery"), (3., "delivery"), (10., "delivery")],
         10,
         Clustering::Vicinity {
-            profile: VehicleProfile { matrix: "car".to_string(), scale: None },
+            profile: VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None },
             threshold: VicinityThresholdPolicy {
                 duration: 3.,
                 distance: 3.,
@@ -176,7 +176,7 @@ fn can_handle_two_clusters_impl(
         job_locations.iter().map(|loc| (*loc, "delivery")).collect::<Vec<_>>().as_slice(),
         10,
         Clustering::Vicinity {
-            profile: VehicleProfile { matrix: "car".to_string(), scale: None },
+            profile: VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None },
             threshold: VicinityThresholdPolicy {
                 duration: 5.,
                 distance: 5.,

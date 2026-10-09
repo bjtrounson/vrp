@@ -27,6 +27,7 @@ pub(crate) fn generate_fleet(problem_proto: &Problem, vehicle_types_size: usize)
                 profile: VehicleProfile {
                     matrix: get_random_item(profiles.as_slice(), &rnd).expect("cannot find any profile").name.clone(),
                     scale: None,
+                    weight_routing: None,
                 },
                 costs: get_random_item(costs.as_slice(), &rnd).expect("cannot find any costs").clone(),
                 shifts: get_random_item(shifts.as_slice(), &rnd).expect("cannot find any shifts").clone(),

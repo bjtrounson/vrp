@@ -75,6 +75,7 @@ fn create_tour(
     let actor = route.actor.as_ref();
     let vehicle = actor.vehicle.as_ref();
     let transport = problem.transport.as_ref();
+    let weights = vrp_core::construction::enablers::route_weights(route);
 
     let mut tour = Tour {
         vehicle_id: vehicle.dimens.get_vehicle_id().unwrap().clone(),
@@ -131,9 +132,18 @@ fn create_tour(
             (start_idx, route.tour.get(start_idx - 1).unwrap())
         };
 
-        let mut leg = route.tour.activities_slice(start_idx, end_idx).iter().fold(
+        let mut leg = route.tour.activities_slice(start_idx, end_idx).iter().enumerate().fold(
             Leg::new(Some((start.place.location, start.schedule.departure)), Some(start_delivery), leg.statistic),
-            |leg, act| {
+            |leg, (offset, act)| {
+                use vrp_core::construction::enablers::VehicleWeightRoutingDimension;
+                let weighted_profile = weights.as_ref().map(|weights| {
+                    vehicle
+                        .dimens
+                        .get_vehicle_weight_routing()
+                        .unwrap()
+                        .profile(weights[start_idx + offset - 1])
+                        .expect("route exceeds supplied weight coverage")
+                });
                 let activity_type = get_activity_type(act).cloned();
                 let (prev_location, prev_departure) = leg.last_detail.unwrap();
                 let prev_load = if activity_type.is_some() {
@@ -166,8 +176,28 @@ fn create_tour(
                 let (driving, transport_cost) = if commute.is_zero_distance() {
                     // NOTE: use original cost traits to adapt time-based costs (except waiting/commuting)
                     let prev_departure = TravelTime::Departure(prev_departure);
-                    let duration = transport.duration(route, prev_location, act.place.location, prev_departure);
-                    let transport_cost = transport.cost(route, prev_location, act.place.location, prev_departure);
+                    let (duration, transport_cost) = match weighted_profile {
+                        Some(profile) => (
+                            transport.duration_with_profile(
+                                route,
+                                profile,
+                                prev_location,
+                                act.place.location,
+                                prev_departure,
+                            ),
+                            transport.cost_with_profile(
+                                route,
+                                profile,
+                                prev_location,
+                                act.place.location,
+                                prev_departure,
+                            ),
+                        ),
+                        None => (
+                            transport.duration(route, prev_location, act.place.location, prev_departure),
+                            transport.cost(route, prev_location, act.place.location, prev_departure),
+                        ),
+                    };
                     (duration, transport_cost)
                 } else {
                     // NOTE: no need to drive in case of non-zero commute, this goes to commuting time
@@ -192,9 +222,13 @@ fn create_tour(
                 let serving_cost = problem.activity.cost(route, act, service_start);
                 let total_cost = serving_cost + transport_cost + waiting * vehicle.costs.per_waiting_time;
 
-                let location_distance =
-                    transport.distance(route, prev_location, act.place.location, TravelTime::Departure(prev_departure))
-                        as i64;
+                let time = TravelTime::Departure(prev_departure);
+                let location_distance = match weighted_profile {
+                    Some(profile) => {
+                        transport.distance_with_profile(route, profile, prev_location, act.place.location, time)
+                    }
+                    None => transport.distance(route, prev_location, act.place.location, time),
+                } as i64;
                 let distance = leg.statistic.distance + location_distance - commute.forward.distance as i64;
 
                 let is_new_stop = match (act.commute.as_ref(), prev_location == act.place.location) {

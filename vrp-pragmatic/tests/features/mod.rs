@@ -19,4 +19,5 @@ mod skills;
 mod timing;
 mod tour_shape;
 mod unassigned;
+mod weight_routing;
 mod work_balance;

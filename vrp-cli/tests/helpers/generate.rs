@@ -31,7 +31,7 @@ pub fn create_test_vehicle_type() -> VehicleType {
     VehicleType {
         type_id: "vehicle".to_string(),
         vehicle_ids: vec!["vehicle_1".to_string()],
-        profile: VehicleProfile { matrix: "car".to_string(), scale: None },
+        profile: VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None },
         costs: VehicleCosts { fixed: None, distance: 1., time: 0. },
         shifts: vec![VehicleShift {
             start: ShiftStart {

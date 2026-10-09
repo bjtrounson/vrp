@@ -15,7 +15,7 @@ fn can_handle_job_in_relation_with_vicinity_cluster_impl(type_field: RelationTyp
         plan: Plan {
             jobs: vec![create_delivery_job("job1", (1., 0.)), create_delivery_job("job2", (1., 0.))],
             clustering: Some(Clustering::Vicinity {
-                profile: VehicleProfile { matrix: "car".to_string(), scale: None },
+                profile: VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None },
                 threshold: VicinityThresholdPolicy {
                     duration: 10.,
                     distance: 10.,

@@ -126,6 +126,77 @@ pub fn validate_routing(ctx: &ValidationContext) -> Result<(), MultiFormatError>
         check_e1503_no_matrix_when_indices_used(ctx, location_types),
         check_e1504_index_size_mismatch(ctx),
         check_e1505_profiles_exist(ctx),
+        check_weight_routing(ctx),
     ])
     .map_err(From::from)
+}
+
+fn check_weight_routing(ctx: &ValidationContext) -> Result<(), FormatError> {
+    let fail = |message: String| FormatError::new("E1506".to_string(), "invalid weight routing".to_string(), message);
+    if let Some(Clustering::Vicinity { profile, .. }) = &ctx.problem.plan.clustering
+        && profile.weight_routing.is_some()
+    {
+        return Err(fail("weightRouting belongs on a vehicle profile, not a clustering profile".into()));
+    }
+    for vehicle in &ctx.problem.fleet.vehicles {
+        let Some(config) = &vehicle.profile.weight_routing else {
+            continue;
+        };
+        if ctx.problem.plan.clustering.is_some() || vehicle.shifts.iter().any(|s| s.recharges.is_some()) {
+            return Err(fail(
+                "weight routing cannot currently be combined with vicinity clustering or recharges".into(),
+            ));
+        }
+        if config.tare_weight_kg < 0 || config.mass_dimension_index >= vehicle.capacity.len() || config.bands.is_empty()
+        {
+            return Err(fail(format!(
+                "vehicle '{}': provide nonnegative tare, a valid massDimensionIndex and nonempty bands",
+                vehicle.type_id
+            )));
+        }
+        if config.tare_weight_kg.checked_add(i64::from(vehicle.capacity[config.mass_dimension_index])).is_none()
+            || vehicle.profile.scale.is_some_and(|scale| !scale.is_finite() || scale <= 0.)
+        {
+            return Err(fail("gross weight must fit in i64 and profile scale must be positive and finite".into()));
+        }
+        let mut limits = HashSet::new();
+        let matrices = ctx.matrices.ok_or_else(|| fail("supply explicit matrices for weight routing".into()))?;
+        for band in &config.bands {
+            if band.max_gross_weight_kg <= 0 || !limits.insert(band.max_gross_weight_kg) {
+                return Err(fail("weight thresholds must be positive and unique".into()));
+            }
+            if !ctx.problem.fleet.profiles.iter().any(|p| p.name == band.matrix) {
+                return Err(fail(format!("unknown weight-band profile '{}'", band.matrix)));
+            }
+            let matching = matrices.iter().filter(|m| m.profile.as_ref() == Some(&band.matrix)).collect::<Vec<_>>();
+            if matching.len() != 1 || matching[0].timestamp.is_some() {
+                return Err(fail(format!("supply exactly one non-timestamped matrix for '{}'", band.matrix)));
+            }
+            let matrix = matching[0];
+            let size = ctx.coord_index.max_matrix_index() + 1;
+            if matrix.distances.len() != size * size
+                || matrix.travel_times.len() != size * size
+                || matrix.error_codes.as_ref().is_some_and(|e| e.len() != size * size)
+            {
+                return Err(fail(format!(
+                    "matrix '{}' must have matching square arrays for the problem's locations",
+                    band.matrix
+                )));
+            }
+            if matrix.distances.iter().chain(&matrix.travel_times).any(|v| *v < 0) {
+                return Err(fail(
+                    "use errorCodes for unreachable legs; distances and times must be nonnegative".into(),
+                ));
+            }
+        }
+        if config.bands.iter().all(|b| b.max_gross_weight_kg < config.tare_weight_kg) {
+            return Err(fail(format!("vehicle '{}': no weight band covers tare weight", vehicle.type_id)));
+        }
+        for task in ctx.problem.plan.jobs.iter().flat_map(|job| job.all_tasks_iter()) {
+            if task.demand.as_ref().is_some_and(|d| d.get(config.mass_dimension_index).is_none_or(|mass| *mass < 0)) {
+                return Err(fail("every demand must include a nonnegative mass at massDimensionIndex".into()));
+            }
+        }
+    }
+    Ok(())
 }

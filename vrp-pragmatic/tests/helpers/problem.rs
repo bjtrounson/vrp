@@ -229,11 +229,11 @@ pub fn create_default_vehicle_costs() -> VehicleCosts {
 }
 
 pub fn create_default_vehicle_profile() -> VehicleProfile {
-    VehicleProfile { matrix: "car".to_string(), scale: None }
+    VehicleProfile { matrix: "car".to_string(), scale: None, weight_routing: None }
 }
 
 pub fn create_vehicle_profile_with_name(name: &str) -> VehicleProfile {
-    VehicleProfile { matrix: name.to_string(), scale: None }
+    VehicleProfile { matrix: name.to_string(), scale: None, weight_routing: None }
 }
 
 pub fn create_default_vehicle_type() -> VehicleType {

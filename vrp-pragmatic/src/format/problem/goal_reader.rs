@@ -19,7 +19,8 @@ pub(super) fn create_goal_context(
     let feature_layers = get_objective_feature_layers(api_problem, blocks, props)?;
     let (mut features, goal_builder) = get_features_with_goal(&feature_layers)?;
 
-    if props.has_unreachable_locations {
+    if props.has_unreachable_locations || api_problem.fleet.vehicles.iter().any(|v| v.profile.weight_routing.is_some())
+    {
         features.push(create_reachable_feature("reachable", blocks.transport.clone(), REACHABLE_CONSTRAINT_CODE)?)
     }
 
@@ -75,6 +76,12 @@ pub(super) fn create_goal_context(
         )?);
     }
 
+    if api_problem.fleet.vehicles.iter().any(|v| v.profile.weight_routing.is_some()) {
+        features.push(vrp_core::construction::enablers::create_weight_routing_feature(
+            blocks.transport.clone(),
+            blocks.activity.clone(),
+        )?);
+    }
     GoalContextBuilder::with_features(&features)?.set_main_goal(goal_builder.build()?).build()
 }
 

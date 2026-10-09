@@ -124,6 +124,35 @@ impl DynamicTransportCost {
 }
 
 impl TransportCost for DynamicTransportCost {
+    fn duration_with_profile(
+        &self,
+        route: &Route,
+        profile: &Profile,
+        from: Location,
+        to: Location,
+        time: TravelTime,
+    ) -> Duration {
+        let duration = self.inner.duration_with_profile(route, profile, from, to, time);
+        if duration < 0. {
+            return duration;
+        }
+        let window = match time {
+            TravelTime::Arrival(t) => TimeWindow::new(t - duration, t),
+            TravelTime::Departure(t) => TimeWindow::new(t, t + duration),
+        };
+        (self.reserved_times_fn)(route, &window).map_or(duration, |reserved| duration + reserved.duration)
+    }
+
+    fn distance_with_profile(
+        &self,
+        route: &Route,
+        profile: &Profile,
+        from: Location,
+        to: Location,
+        time: TravelTime,
+    ) -> Distance {
+        self.inner.distance_with_profile(route, profile, from, to, time)
+    }
     fn duration_approx(&self, profile: &Profile, from: Location, to: Location) -> Duration {
         self.inner.duration_approx(profile, from, to)
     }
